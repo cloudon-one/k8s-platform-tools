@@ -1,0 +1,115 @@
+common:
+  provider: "aws"
+  statebucketsuffix: tf-state-010
+  owner: "cloudon"
+  default_region: &DefReg "us-east-2"
+  common_tags:
+    owner: "cloudon"
+    terraform: "true"
+
+  vpc_id: "vpc-XXXXXXXXXXXXXX"
+  private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
+  region: &DefReg "us-east-2"
+  eks_cluster_name: "dev-eks-cluster"
+  environment: "dev"
+
+
+Platform:
+  Tools: 
+    airflow:
+      inputs:
+        airflow_version: "2.7.1"
+        instance_type: "t3.medium"
+
+    argocd:
+      inputs:
+        argocd_version: "2.1.2"
+        admin_password: "demo-password-123!"
+        metrics_retention: "7d"
+        alert_slack_webhook: "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ"
+        alert_email_to: "platform-alerts@cloudon.work"
+        repositories:
+          - name: "infrastructure"
+            url: "https://github.com/cloudon-one/aws-terragrunt-configuration.git"
+            path: "kubernetes"
+            credentials:
+              username: "git-user"
+              password: "github-pat-token"
+            type: "git"      
+          - name: "applications"
+            url: "https://github.com/cloudon-one/aws-cleaner.git"
+            path: "kubernetes/apps"
+            credentials:
+              ssh_private_key: |
+                -----BEGIN RSA PRIVATE KEY-----
+                MIIEpAIBAAKCAQEAxxxx
+                ... (SSH private key content) ...
+                -----END RSA PRIVATE KEY-----
+          - name: "private-gitlab" #example of private gitlab repository
+            url: "https://gitlab.company.com/platform/services.git"
+            path: "manifests"
+            credentials:
+              tls_client_cert: |
+                -----BEGIN CERTIFICATE-----
+                MIIDXTCCAkWgAwIBAgIJALXXX
+                ... (Client certificate content) ...
+                -----END CERTIFICATE-----
+              tls_client_cert_key: |
+                -----BEGIN PRIVATE KEY-----
+                MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIB
+                ... (Client certificate key content) ...
+                -----END PRIVATE KEY-----
+            insecure: false     
+        github_apps: # example of GitHub App configuration
+          - id: "123456"
+            installation_id: "654321"
+            private_key: |
+              -----BEGIN RSA PRIVATE KEY-----
+              MIIEowIBAAKCAQEAxxxx
+              ... (GitHub App private key content) ...
+              -----END RSA PRIVATE KEY-----  
+        repositories_cert:
+          - server_name: "gitlab.company.com"
+            cert_data: |
+              -----BEGIN CERTIFICATE-----
+              MIIDfTCCAmWgAwIBAgIJALXXX
+              ... (CA certificate content) ...
+              -----END CERTIFICATE-----   
+        git_repositories: # example of Git repositories configuration
+          - name: "frontend-app"
+            url: "https://github.com/cloudon-one/frontend.git"
+            path: "k8s/base"
+          - name: "backend-services"
+            url: "https://github.com/cloudon-one/backend.git"
+            path: "deploy/overlays/dev"
+          - name: "shared-resources"
+            url: "git@github.com:cloudon-one/shared.git"
+            path: "common/resources"         
+
+    cert-manager:
+      inputs:
+
+    external-dns:
+      inputs:
+
+    external-secrets:
+      inputs:
+
+    istio:
+      inputs:
+
+    jeager:
+      inputs:
+
+    karpenter:
+      inputs:
+
+    kong-ingress:
+      inputs:
+
+    kubecost:
+      inputs:
+
+    loki-stack:
+      inputs:                                    
+  
