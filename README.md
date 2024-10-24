@@ -35,8 +35,8 @@ This repository contains the Terragrunt configurations for deploying and managin
 
 ## Prerequisites
 
-- Terraform >= 1.0.0
-- Terragrunt >= 0.45.0
+- Terraform >= 1.5+
+- Terragrunt >= 0.60+
 - AWS CLI configured with appropriate credentials
 - kubectl configured to access your cluster
 - Existing EKS cluster
