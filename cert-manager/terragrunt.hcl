@@ -14,7 +14,9 @@ locals {
   inputs = merge(
     local.platform_vars.Platform.Tools[local.tool].inputs,
     {
-      #environment         = local.platform_vars.common.environment
-      #eks_cluster_name    = local.platform_vars.common.eks_cluster_name
+      aws_iam_oidc_provider_arn = "arn:aws:iam::${local.platform_vars.common.aws_account_id}:oidc-provider/oidc.eks.${local.platform_vars.common.aws_region}.amazonaws.com/id/${local.platform_vars.common.eks_cluster_name}"
+      aws_iam_oidc_provider = "oidc.eks.${local.platform_vars.common.aws_region}.amazonaws.com/id/${local.platform_vars.common.eks_cluster_name}"
+      route53_hosted_zone_id = local.platform_vars.common.route53_hosted_zone_id
+      tags = local.platform_vars.common.common_tags
     }
   )

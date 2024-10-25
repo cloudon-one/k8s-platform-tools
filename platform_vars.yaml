@@ -4,14 +4,12 @@ common:
   domain: "cloudon.work"
   statebucketsuffix: tf-state-010
   owner: "cloudon"
-  default_region: &DefReg "us-east-2"
+  aws_region: "us-east-2"
   vpc_id: "vpc-XXXXXXXXXXXXXX"
   private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
   eks_cluster_name: "dev-eks-cluster"
   environment: "dev"
-  route53_zone_id: "Z0123456789ABCDEF"
-  eks_oidc_provider: &oidc_provider "oidc.eks.us-west-2.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE"
-  eks_oidc_provider_arn: &oidc_provider_arn "arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-west-2.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE"
+  route53_hosted_zone_id: "Z0123456789ABCDEF"
   common_tags:
     Environment: "dev"
     Owner: "cloudon"
@@ -95,44 +93,14 @@ Platform:
 
     cert-manager:
       inputs:
-        service_account:
-          name: "cert-manager"
-          annotations:
-            eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-cert-manager-role"
-        acme:
-          acme_email: "platform@${local.platform_vars.common.domain}"
-          server: >
-            ${local.platform_vars.common.environment == "prod" 
-            ? "https://acme-v02.api.letsencrypt.org/directory" 
-            : "https://acme-staging-v02.api.letsencrypt.org/directory"}
-        cluster_issuer:
-          create: true
-          name: "letsencrypt-${local.platform_vars.common.environment}"
-        dns_challenge:
-          enabled: true
-          zone_id: "${local.platform_vars.common.route53_zone_id}"
-          region: "${local.platform_vars.common.aws_region}"
-        aws:
-          create_iam_role: true
-          role_name: "${local.platform_vars.common.environment}-cert-manager"
-          region: "${local.platform_vars.common.aws_region}"
-          iam:
-            oidc:
-              provider_arn: "${local.platform_vars.common.eks_oidc_provider_arn}"
-              provider_url: "${local.platform_vars.common.eks_oidc_provider}"
-        additional_set_values:
-          - name: "global.priorityClassName"
-            value: "system-cluster-critical"
-        tags:
-          Environment: "dev"
-          Component: "cert-manager"
-          ManagedBy: "terraform"
-          Team: "platform"
-          ClusterName: "dev-eks-cluster"
 
     external-dns:
       inputs:
-
+        service_account:
+          name: "external-dns"
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-cert-manager-role"
+        
     external-secrets:
       inputs:
         chart_version: "0.9.9"
@@ -156,9 +124,6 @@ Platform:
           Environment: "dev"
           Cluster: "dev-eks-cluster"
           ManagedBy: "Terragrunt"  
-
-        
-
 
     istio:
       inputs:
