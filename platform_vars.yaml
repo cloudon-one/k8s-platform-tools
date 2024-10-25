@@ -1,18 +1,22 @@
 common:
   provider: "aws"
   aws_account_id: "111122223333"
-  oidc_provider: "oidc.eks.us-east-2.amazonaws.com/id/EXAMPLE"
+  domain: "cloudon.work"
   statebucketsuffix: tf-state-010
   owner: "cloudon"
-  default_region: &DefReg "us-east-2"
-  common_tags:
-    owner: "cloudon"
-    terraform: "true"
-
+  aws_region: "us-east-2"
   vpc_id: "vpc-XXXXXXXXXXXXXX"
   private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
   eks_cluster_name: "dev-eks-cluster"
   environment: "dev"
+  route53_hosted_zone_id: "Z0123456789ABCDEF"
+  common_tags:
+    Environment: "dev"
+    Owner: "cloudon"
+    ManagedBy: "Terragrunt"
+    Team: "platform"
+    Component: "platform"
+    ClusterName: "dev-eks-cluster"
 
 
 Platform:
@@ -92,7 +96,11 @@ Platform:
 
     external-dns:
       inputs:
-
+        service_account:
+          name: "external-dns"
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-cert-manager-role"
+        
     external-secrets:
       inputs:
         chart_version: "0.9.9"
@@ -116,9 +124,6 @@ Platform:
           Environment: "dev"
           Cluster: "dev-eks-cluster"
           ManagedBy: "Terragrunt"  
-
-        
-
 
     istio:
       inputs:
