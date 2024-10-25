@@ -15,7 +15,11 @@ terraform {
 
 locals {
   platform_vars   = yamldecode(file(("platform_vars.yaml")))
+  environment     = get_env("ENV", "dev")
+  aws_region      = local.platform_vars.common.default_region
+  tags            = local.platform_vars.common.common_tags 
 }
+
 
 remote_state {
     backend = "s3"
