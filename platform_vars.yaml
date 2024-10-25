@@ -1,5 +1,7 @@
 common:
   provider: "aws"
+  aws_account_id: "111122223333"
+  oidc_provider: "oidc.eks.us-east-2.amazonaws.com/id/EXAMPLE"
   statebucketsuffix: tf-state-010
   owner: "cloudon"
   default_region: &DefReg "us-east-2"
@@ -9,7 +11,6 @@ common:
 
   vpc_id: "vpc-XXXXXXXXXXXXXX"
   private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
-  region: &DefReg "us-east-2"
   eks_cluster_name: "dev-eks-cluster"
   environment: "dev"
 
@@ -94,6 +95,30 @@ Platform:
 
     external-secrets:
       inputs:
+        chart_version: "0.9.9"
+        service_account:
+          name: "external-secrets"
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-external-secrets-role"
+        oidc:
+          provider_arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:oidc-provider/${local.platform_vars.common.eks_oidc_provider}"
+          provider_url: "${local.platform_vars.common.eks_oidc_provider}"    
+        kms:
+          key_arns: 
+          - "arn:aws:kms:${local.platform_vars.common.default_region}:${local.platform_vars.common.aws_account_id}:key/${local.platform_vars.common.environment}-key"   
+        secrets_manager:
+          arns: 
+          - "arn:aws:secretsmanager:${local.platform_vars.common.default_region}:${local.platform_vars.common.aws_account_id}:secret:${local.platform_vars.common.environment}-secrets"
+        parameter_store:
+          arns:
+          - "arn:aws:ssm:${local.platform_vars.common.default_region}:${local.platform_vars.common.aws_account_id}:parameter/${local.platform_vars.common.environment}/*"  
+        tags:
+          Environment: "dev"
+          Cluster: "dev-eks-cluster"
+          ManagedBy: "Terragrunt"  
+
+        
+
 
     istio:
       inputs:
