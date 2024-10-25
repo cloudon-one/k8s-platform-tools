@@ -14,7 +14,5 @@ locals {
 inputs = merge(
   local.platform_vars.Platform.Tools[local.tool].inputs,
   {
-    #environment         = local.platform_vars.common.environment
-    #eks_cluster_name    = local.platform_vars.common.eks_cluster_name
   }
 )
