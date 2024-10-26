@@ -14,8 +14,5 @@ locals {
 inputs = merge(
   local.platform_vars.Platform.Tools[local.tool].inputs,
   {
-    #cluster_endpoint = local.cluster_endpoint
-    cluster_oidc_provider = "arn:aws:iam::${local.platform_vars.common.aws_account_id}:oidc-provider/oidc.eks.${local.platform_vars.common.aws_region}.amazonaws.com/id/${local.platform_vars.common.eks_cluster_name}"
-    cluster_node_role_arn = "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.eks_cluster_name}-NodeInstanceRole"
   }
 )

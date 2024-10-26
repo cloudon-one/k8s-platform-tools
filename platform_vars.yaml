@@ -193,7 +193,7 @@ Platform:
           release: "dev-jaeger"               
 
     karpenter:
-      inputs: 
+      inputs:
 
     kong-ingress:
       inputs:
