@@ -7,11 +7,14 @@ terraform {
 }
 
 locals {
-  common_vars   = yamldecode(file(find_in_parent_folders("vars.yaml")))
+  platform_vars = yamldecode(file(find_in_parent_folders("platform_vars.yaml")))
   tool          = basename(get_terragrunt_dir())
-  platform      = basename(dirname(get_terragrunt_dir()))
-  resource_vars = local.common_vars["Platform-tools"]["${local.account}"]["Resources"]["${local.resource}"]
 }
 
-inputs = merge(
-  local.resource_vars["inputs"],{})
+  inputs = merge(
+    local.platform_vars.Platform.Tools[local.tool].inputs,
+    {
+      cluster_name = local.platform_vars.common.eks_cluster_name  
+      cluster_oidc_provider = local.platform_vars.common.cluster_oidc_provider
+    }
+  )

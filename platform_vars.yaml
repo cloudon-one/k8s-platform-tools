@@ -9,6 +9,7 @@ common:
   private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
   database_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
   eks_cluster_name: "dev-eks-cluster"
+  cluster_oidc_provider: "oidc.eks.us-east-2.amazonaws.com/id/XXXXXXXXXXXXXX"
   environment: "dev"
   route53_hosted_zone_id: "Z0123456789ABCDEF"
   common_tags:
@@ -206,6 +207,16 @@ Platform:
 
     kubecost:
       inputs:
+        ingress_host: "kubecost.cloudon.work"
+        ingress_annotations:
+          kubernetes.io/ingress.class: "nginx"
+          cert-manager.io/cluster-issuer: "dev-letsencrypt"
+          nginx.ingress.kubernetes.io/ssl-redirect: true
+        extra_values:
+          networkCosts.enabled: true
+          prometheus.server.retention: 7d
+        s3_bucket_name: "aws-cloudon-kubecost-bucket"  
+
 
     loki-stack:
       inputs:                                    
