@@ -14,8 +14,6 @@ locals {
   inputs = merge(
     local.platform_vars.Platform.Tools[local.tool].inputs,
     {
-      service_account_annotations = {
-        eks.amazonaws.com/role-arn = "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-external-dns-role"
         domain_filters = [local.platform_vars.common.domain_name]
         zone_id_filters = [local.platform_vars.common.route53_hosted_zone_id]
         aws_iam_oidc_provider_arn = "arn:aws:iam::${local.platform_vars.common.aws_account_id}:oidc-provider/oidc.eks.${local.platform_vars.common.aws_region}.amazonaws.com/id/${local.platform_vars.common.eks_cluster_name}"
