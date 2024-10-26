@@ -224,8 +224,22 @@ Platform:
         ingress_host: "loki.cloudon.work"
         ingress_annotations:
           kubernetes.io/ingress.class: "nginx"
-          cert-manager.io/cluster-issuer: "dev-letsencrypt"
+          cert-manager.io/cluster-issuer: "letsencrypt"
           nginx.ingress.kubernetes.io/ssl-redirect: true
+
+    vault:
+      inputs:
+        service_account_annotations: 
+          eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vault-server-role"   
+        ingress_host: "vault.cloudon.work"
+        ingress_annotations:
+          kubernetes.io/ingress.class: "nginx"
+          cert-manager.io/cluster-issuer: "letsencrypt"
+          nginx.ingress.kubernetes.io/ssl-redirect: true
+        iam_role_arn: "arn:aws:iam::123456789012:role/vault-server-role"  
+        kms_key_id: "alias/vault-auto-unseal"
+    
+
 
 
   
