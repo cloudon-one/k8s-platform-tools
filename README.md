@@ -241,30 +241,30 @@ This repository contains the Terragrunt configurations for deploying and managin
 ```plaintext
 .
 ├── LICENSE
-├── common.hcl                 # Common Terragrunt configuration
-├── platform_vars.yaml         # Platform-wide variables
-├── terragrunt.hcl            # Root Terragrunt configuration
+├── common.hcl                  # Common Terragrunt configuration
+├── platform_vars.yaml          # Platform-wide variables
+├── terragrunt.hcl              # Root Terragrunt configuration
 │
 ├── Service Mesh & Ingress
-│   ├── istio/                # Service mesh
-│   ├── kong-ingress/         # API Gateway & Ingress controller
-│   └── jeager/               # Distributed tracing
+│   ├── istio/                  # Service mesh
+│   ├── kong-ingress/           # API Gateway & Ingress controller
+│   └── jeager/                 # Distributed tracing
 │
 ├── Security & Certificates
-│   ├── cert-manager/         # Certificate management
-│   └── external-secrets/     # Secrets management
+│   ├── cert-manager/           # Certificate management
+│   └── external-secrets/       # Secrets management
 │
 ├── Observability Stack
-│   ├── loki-stack/          # Log aggregation
-│   └── kubecost/            # Cost monitoring
+│   ├── loki-stack/             # Log aggregation
+│   └── kubecost/               # Cost monitoring
 │
 ├── Platform Tools
-│   ├── airflow/             # Workflow orchestration
-│   ├── argocd/              # GitOps deployment
-│   └── external-dns/        # DNS management
+│   ├── airflow/                # Workflow orchestration
+│   ├── argocd/                 # GitOps deployment
+│   └── external-dns/           # DNS management
 │
 └── Cluster Management
-    └── karpenter/           # Autoscaling
+    └── karpenter/              # Autoscaling
 ```
 
 ## Prerequisites
