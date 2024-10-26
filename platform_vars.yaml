@@ -91,6 +91,34 @@ Platform:
             url: "git@github.com:cloudon-one/shared.git"
             path: "common/resources"         
 
+    atlantis:
+      inputs:
+        iam_role_arn: "arn:aws:iam::123456789012:role/atlantis-server-role"
+        github_token: "github-token-123!"
+        github_webhook_secret: "webhook-secret"
+        gitlab_token: "gitlab-token-123!"
+        gitlab_webhook_secret: "web-secret-123!"
+        webhook_url: "https://atlantis.cloudon.work/events"
+        org_whitelist: ["cloudon-one"]
+        repo_config_json: |
+          [{
+          "repositories": [
+            "cloudon-one/aws-terragrunt-configuration",
+            "cloudon-one/aws-terraform-modules"
+            "cloudon-one/k8s-platform-tools",
+            "cloudon-one/k8s-platform-modules"
+          ]
+        ingress_host: "atlantis.cloudon.work"
+        ingress_annotations:
+          kubernetes.io/ingress.class: "nginx"
+          cert-manager.io/cluster-issuer: "letsencrypt"
+          nginx.ingress.kubernetes.io/ssl-redirect: true
+        namespace_labels: 
+          app: "atlantis"
+          release: "atlantis"
+        service_account_annotations: 
+          eks.amazonaws.com/role-arn: "arn:aws:iam::111122223333:role/dev-atlantis-role"    
+
     cert-manager:
       inputs:
         service_account:
@@ -204,7 +232,6 @@ Platform:
         allowed_cidrs: ["10.0.0.0/8"]
         admin_allowed_cidrs: ["10.0.0.0/16"]
 
-
     kubecost:
       inputs:
         ingress_host: "kubecost.cloudon.work"
@@ -216,7 +243,6 @@ Platform:
           networkCosts.enabled: true
           prometheus.server.retention: 7d
         s3_bucket_name: "aws-cloudon-kubecost-bucket"  
-
 
     loki-stack:
       inputs:  
