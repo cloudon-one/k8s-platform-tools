@@ -7,6 +7,7 @@ common:
   aws_region: "us-east-2"
   vpc_id: "vpc-XXXXXXXXXXXXXX"
   private_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
+  database_subnet_ids: ["subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX", "subnet-XXXXXXXXXXXXXX"]
   eks_cluster_name: "dev-eks-cluster"
   environment: "dev"
   route53_hosted_zone_id: "Z0123456789ABCDEF"
@@ -195,8 +196,13 @@ Platform:
     karpenter:
       inputs:
 
-    kong-ingress:
+    kong-gw:
       inputs:
+        name: "kong-gateway"
+        database_password: "kong-password-123!"
+        allowed_cidrs: ["10.0.0.0/8"]
+        admin_allowed_cidrs: ["10.0.0.0/16"]
+
 
     kubecost:
       inputs:
