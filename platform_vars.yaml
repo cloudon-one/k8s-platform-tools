@@ -219,5 +219,13 @@ Platform:
 
 
     loki-stack:
-      inputs:                                    
+      inputs:  
+        s3_bucket_name: "aws-cloudon-loki-bucket"
+        ingress_host: "loki.cloudon.work"
+        ingress_annotations:
+          kubernetes.io/ingress.class: "nginx"
+          cert-manager.io/cluster-issuer: "dev-letsencrypt"
+          nginx.ingress.kubernetes.io/ssl-redirect: true
+
+
   
