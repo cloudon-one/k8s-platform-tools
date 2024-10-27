@@ -121,10 +121,8 @@ Platform:
 
     cert-manager:
       inputs:
-        service_account:
-          name: "cert-manager"
-          annotations:
-            eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-cert-manager"
+        service_account_annotations:
+          eks.amazonaws.com/role-arn: "arn:aws:iam::${local.platform_vars.common.aws_account_id}:role/${local.platform_vars.common.environment}-cert-manager"
 
     external-dns:
       inputs:
