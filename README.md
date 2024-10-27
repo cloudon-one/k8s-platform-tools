@@ -67,8 +67,8 @@ graph TB
 
 ## 🚀 Prerequisites
 
-- Terragrunt >= v0.45.0
-- Terraform >= v1.0.0
+- Terragrunt >= v0.60.0
+- Terraform >= v1.5.0
 - AWS CLI configured
 - kubectl configured
 - Helm v3.x
@@ -78,19 +78,27 @@ graph TB
 ### Common Configuration (common.hcl)
 ```hcl
 locals {
-  platform_vars = yamldecode(file("${get_parent_terragrunt_dir()}/platform_vars.yaml"))
-  aws_region   = local.platform_vars.aws_region
-  cluster_name = local.platform_vars.cluster_name
-  environment  = local.platform_vars.environment
+  platform_vars     = yamldecode(file(("platform_vars.yaml")))
+  eks_cluster_name  = local.platform_vars.common.eks_cluster_name
+  environment       = get_env("ENV", "dev")
+  aws_region        = local.platform_vars.common.aws_region
+  tags              = local.platform_vars.common.common_tags 
 }
 ```
 
 ### Platform Variables (platform_vars.yaml)
 ```yaml
-aws_region: us-west-2
-cluster_name: platform-eks
-environment: production
-domain_name: example.com
+aws_region:       "us-east-2"
+eks_cluster_name: "dev-eks-cluster"
+environment:      "dev"
+domain_name:      "cloudon.work"
+common_tags:
+    Environment: "dev"
+    Owner: "cloudon"
+    ManagedBy: "Terragrunt"
+    Team: "platform"
+    ClusterName: "dev-eks-cluster"
+...
 ```
 
 ## 📦 Component Deployment Order
@@ -156,22 +164,26 @@ terragrunt run-all destroy
 ### ArgoCD
 ```hcl
 # argocd/terragrunt.hcl
-include {
-  path = find_in_parent_folders()
-}
-
-dependencies {
-  paths = ["../cert-manager", "../external-secrets"]
+include "common" {
+  path = find_in_parent_folders("common.hcl")
 }
 
 terraform {
-  source = "git::https://github.com/your-org/k8s-platform-modules.git//k8s-platform-argocd"
+  source = "git::https://git@github.com/cloudon-one/k8s-platform-modules.git//k8s-platform-argocd?ref=dev"
 }
 
-inputs = {
-  enabled = true
-  domain  = "argocd.example.com"
+locals {
+  platform_vars = yamldecode(file(find_in_parent_folders("platform_vars.yaml")))
+  tool          = basename(get_terragrunt_dir())
 }
+
+inputs = merge(
+  local.platform_vars.Platform.Tools[local.tool].inputs,
+  {
+    environment         = local.platform_vars.common.environment
+    eks_cluster_name    = local.platform_vars.common.eks_cluster_name
+  }
+)
 ```
 
 Similar configurations exist for other components.
