@@ -44,8 +44,8 @@ graph TB
 ```
 .
 ├── common.hcl                # Common Terragrunt configuration
-├── terragrunt.hcl           # Root Terragrunt configuration
-├── platform_vars.yaml       # Platform-wide variables
+├── terragrunt.hcl            # Root Terragrunt configuration
+├── platform_vars.yaml        # Platform-wide variables
 ├── core-platform/
 │   ├── karpenter/
 │   ├── external-dns/
@@ -93,11 +93,11 @@ eks_cluster_name: "dev-eks-cluster"
 environment:      "dev"
 domain_name:      "cloudon.work"
 common_tags:
-    Environment: "dev"
-    Owner: "cloudon"
-    ManagedBy: "Terragrunt"
-    Team: "platform"
-    ClusterName: "dev-eks-cluster"
+    Environment:  "dev"
+    Owner:        "cloudon"
+    ManagedBy:    "Terragrunt"
+    Team:         "platform"
+    ClusterName:  "dev-eks-cluster"
 ...
 ```
 
@@ -269,7 +269,7 @@ For support, please open an issue in the repository.
 
 | Component | Version | Terraform Provider | Helm Chart |
 |-----------|---------|-------------------|------------|
-| ArgoCD | v2.7.x | >= 2.0.0 | 5.46.x |
-| Istio | 1.19.x | >= 2.0.0 | 1.19.x |
-| Vault | 1.15.x | >= 2.0.0 | 0.25.x |
-| Kong | 3.5.x | >= 2.0.0 | 2.25.x |
+| ArgoCD    | v2.7.x  | >= 2.0.0 | 5.46.x |
+| Istio     | 1.19.x  | >= 2.0.0 | 1.19.x |
+| Vault     | 1.15.x  | >= 2.0.0 | 0.25.x |
+| Kong      | 3.5.x   | >= 2.0.0 | 2.25.x |
