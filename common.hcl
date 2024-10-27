@@ -14,10 +14,11 @@ terraform {
 }
 
 locals {
-  platform_vars   = yamldecode(file(("platform_vars.yaml")))
-  environment     = get_env("ENV", "dev")
-  aws_region      = local.platform_vars.common.aws_region
-  tags            = local.platform_vars.common.common_tags 
+  platform_vars     = yamldecode(file(("platform_vars.yaml")))
+  eks_cluster_name  = local.platform_vars.common.eks_cluster_name
+  environment       = get_env("ENV", "dev")
+  aws_region        = local.platform_vars.common.aws_region
+  tags              = local.platform_vars.common.common_tags 
 }
 
 
