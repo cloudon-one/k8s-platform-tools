@@ -43,26 +43,24 @@ graph TB
 
 ```
 .
-├── common.hcl                # Common Terragrunt configuration
-├── terragrunt.hcl            # Root Terragrunt configuration
-├── platform_vars.yaml        # Platform-wide variables
-├── core-platform/
-│   ├── karpenter/
-│   ├── external-dns/
-│   ├── cert-manager/
-│   └── external-secrets/
-├── service-mesh/
-│   ├── istio/
-│   ├── kong-gw/
-│   └── jeager/
-├── observability/
-│   ├── loki-stack/
-│   └── kubecost/
-└── platform-tools/
-    ├── argocd/
-    ├── atlantis/
-    ├── airflow/
-    └── vault/
+├── core-platform/           # Core platform components
+│   ├── cert-manager         # Certificate management
+│   ├── external-dns         # DNS automation
+│   ├── external-secrets     # Secrets management
+│   └── karpenter            # Kubernetes node provisioning
+├── service-mesh/            # Service mesh components
+│   ├── istio                # Service mesh control plane
+│   ├── jeager               # Distributed tracing
+│   └── kong-gw              # API gateway
+├── observability/           # Monitoring and observability
+│   ├── kubecost             # Cost monitoring
+│   └── loki-stack           # Log aggregation
+├── platform-tools/          # Platform utilities
+│   ├── airflow              # Workflow automation
+│   ├── argocd               # GitOps deployment
+│   ├── atlantis             # Terraform automation
+│   └── vault                # Secrets management
+└── ci-cd-templates/         # Reusable CI/CD workflows
 ```
 
 ## 🚀 Prerequisites
