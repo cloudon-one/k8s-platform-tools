@@ -212,6 +212,20 @@ Similar configurations exist for other components.
 - Kubecost for cost monitoring
 - Custom dashboards in Grafana
 
+## 🔧 CI/CD Integration
+The repository includes reusable CI/CD templates for:
+
+- Docker image building (ci-cd-templates/reusable-docker-build.yaml)
+- Terragrunt operations (ci-cd-templates/terragrunt-plan-apply.yaml)
+- Environment variable management (ci-cd-templates/get-env-func.yaml)
+
+Additionally, test coverage action templates are available for multiple languages:
+
+- Java
+- .NET
+- Node.js
+- Python
+
 ## 🔄 Maintenance
 
 ### Upgrades
