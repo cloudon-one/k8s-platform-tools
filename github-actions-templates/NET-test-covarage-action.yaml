@@ -1,0 +1,170 @@
+name: dotnet-test-coverage
+description: |
+  Execute .NET unit tests with code coverage analysis.
+  Features:
+  - Multiple .NET SDK versions support
+  - Configurable test filters and categories
+  - NuGet package caching
+  - Parallel test execution
+  - Test retry on failure
+  - Coverage threshold enforcement
+  - Detailed test and coverage reporting
+
+inputs:
+  sln:
+    description: 'Path to the .NET solution file'
+    required: true
+  dotnet-version:
+    description: '.NET SDK version(s) to use (comma-separated for multiple)'
+    required: false
+    default: '7.0'
+  configuration:
+    description: 'Build configuration (Debug/Release)'
+    required: false
+    default: 'Release'
+  test-filter:
+    description: 'Test filter expression (e.g., Category=Unit|Integration)'
+    required: false
+    default: ''
+  parallel:
+    description: 'Maximum parallel test execution count'
+    required: false
+    default: '1'
+  retry-count:
+    description: 'Number of times to retry failed tests'
+    required: false
+    default: '0'
+  retry-on-failure:
+    description: 'Retry tests on failure'
+    required: false
+    default: 'false'
+  timeout-minutes:
+    description: 'Test execution timeout in minutes'
+    required: false
+    default: '30'
+  coverage-threshold:
+    description: 'Minimum code coverage percentage required'
+    required: false
+    default: '60'
+  fail-on-coverage:
+    description: 'Fail workflow if coverage is below threshold'
+    required: false
+    default: 'true'
+  additional-test-arguments:
+    description: 'Additional arguments to pass to dotnet test'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET SDK(s)
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      shell: bash
+      run: dotnet restore ${{ inputs.sln }}
+      
+    - name: Build solution
+      shell: bash
+      run: dotnet build ${{ inputs.sln }} --configuration ${{ inputs.configuration }} --no-restore
+
+    - name: Run tests with coverage
+      id: test
+      shell: bash
+      run: |
+        TEST_CMD="dotnet test ${{ inputs.sln }} \
+          --configuration ${{ inputs.configuration }} \
+          --no-build \
+          --verbosity normal \
+          --logger trx \
+          --collect:'XPlat Code Coverage' \
+          --results-directory ./testResults"
+
+        # Add test filter if provided
+        if [ ! -z "${{ inputs.test-filter }}" ]; then
+          TEST_CMD="$TEST_CMD --filter '${{ inputs.test-filter }}'"
+        fi
+
+        # Add parallel execution if enabled
+        if [ "${{ inputs.parallel }}" -gt 1 ]; then
+          TEST_CMD="$TEST_CMD --parallel --max-parallel ${{ inputs.parallel }}"
+        fi
+
+        # Add retry options if enabled
+        if [ "${{ inputs.retry-on-failure }}" == "true" ]; then
+          TEST_CMD="$TEST_CMD --retry-on-failure --retry-count ${{ inputs.retry-count }}"
+        fi
+
+        # Add additional test arguments if provided
+        if [ ! -z "${{ inputs.additional-test-arguments }}" ]; then
+          TEST_CMD="$TEST_CMD ${{ inputs.additional-test-arguments }}"
+        fi
+
+        echo "Executing: $TEST_CMD"
+        eval "$TEST_CMD"
+
+    - name: Test Results (dorny)
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: '.NET Test Results'
+        path: ./testResults/*.trx
+        reporter: dotnet-trx
+        fail-on-error: true
+
+    - name: Test Results (EnricoMi)
+      uses: EnricoMi/publish-unit-test-result-action/composite@v2
+      if: always()
+      with:
+        trx_files: "./testResults/*.trx"
+        check_name: '.NET Test Results (Detailed)'
+
+    - name: Generate Code Coverage Report
+      uses: irongut/CodeCoverageSummary@v1.3.0
+      if: always()
+      with:
+        filename: ./testResults/**/coverage.cobertura.xml
+        badge: true
+        fail_below_min: ${{ inputs.fail-on-coverage }}
+        format: markdown
+        hide_branch_rate: false
+        hide_complexity: false
+        indicators: true
+        output: both
+        thresholds: '${{ inputs.coverage-threshold }} 80'
+
+    - name: Check Coverage Threshold
+      if: inputs.fail-on-coverage == 'true'
+      shell: bash
+      run: |
+        COVERAGE=$(grep -oP 'Line coverage: \K[0-9.]+' code-coverage-results.md || echo "0")
+        if (( $(echo "$COVERAGE < ${{ inputs.coverage-threshold }}" | bc -l) )); then
+          echo "::error::Code coverage ($COVERAGE%) is below the required threshold (${{ inputs.coverage-threshold }}%)"
+          exit 1
+        fi
+
+    - name: Publish Coverage Report
+      if: always()
+      shell: bash
+      run: |
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "## Code Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "Test Configuration:" >> $GITHUB_STEP_SUMMARY
+        echo "- .NET Version: ${{ inputs.dotnet-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Configuration: ${{ inputs.configuration }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Filter: ${{ inputs.test-filter || 'None' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Parallel Execution: ${{ inputs.parallel > 1 && 'Yes' || 'No' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Retry on Failure: ${{ inputs.retry-on-failure }}" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY

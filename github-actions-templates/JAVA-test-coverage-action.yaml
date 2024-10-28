@@ -1,0 +1,277 @@
+name: java-test-coverage
+description: |
+  Execute Java tests with code coverage reporting.
+  Features:
+  - Configurable Java version
+  - Support for Maven and Gradle
+  - JUnit test execution
+  - JaCoCo code coverage
+  - Test result reporting
+  - Dependency caching
+  - Detailed coverage reporting
+  - Configurable coverage thresholds
+
+inputs:
+  java-version:
+    description: 'Java version to use'
+    required: false
+    default: '17'
+  java-distribution:
+    description: 'Java distribution (temurin, adopt, zulu)'
+    required: false
+    default: 'temurin'
+  build-tool:
+    description: 'Build tool to use (maven/gradle)'
+    required: false
+    default: 'maven'
+  coverage-threshold:
+    description: 'Minimum coverage threshold (0-100)'
+    required: false
+    default: '80'
+  test-pattern:
+    description: 'Test class pattern to match'
+    required: false
+    default: '**/Test*.java'
+  include-files:
+    description: 'Include file details in coverage report'
+    required: false
+    default: 'false'
+  custom-build-args:
+    description: 'Additional build tool arguments'
+    required: false
+    default: ''
+  skip-tests:
+    description: 'Regex pattern of tests to skip'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.java-distribution }}
+        cache: ${{ inputs.build-tool }}
+
+    - name: Setup Maven settings
+      if: inputs.build-tool == 'maven'
+      shell: bash
+      run: |
+        mkdir -p ~/.m2
+        echo "<settings>
+          <profiles>
+            <profile>
+              <id>coverage</id>
+              <properties>
+                <jacoco.version>0.8.10</jacoco.version>
+                <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+                <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
+                <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+              </properties>
+            </profile>
+          </profiles>
+        </settings>" > ~/.m2/settings.xml
+
+    - name: Setup Gradle properties
+      if: inputs.build-tool == 'gradle'
+      shell: bash
+      run: |
+        mkdir -p ~/.gradle
+        echo "org.gradle.caching=true
+        org.gradle.parallel=true
+        org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError
+        " > ~/.gradle/gradle.properties
+
+    - name: Configure JaCoCo for Maven
+      if: inputs.build-tool == 'maven'
+      shell: bash
+      run: |
+        echo "<plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>\${jacoco.version}</version>
+          <executions>
+            <execution>
+              <id>prepare-agent</id>
+              <goals>
+                <goal>prepare-agent</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>report</id>
+              <phase>test</phase>
+              <goals>
+                <goal>report</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>check</id>
+              <goals>
+                <goal>check</goal>
+              </goals>
+              <configuration>
+                <rules>
+                  <rule>
+                    <element>BUNDLE</element>
+                    <limits>
+                      <limit>
+                        <counter>LINE</counter>
+                        <value>COVEREDRATIO</value>
+                        <minimum>${{ inputs.coverage-threshold }}%</minimum>
+                      </limit>
+                    </limits>
+                  </rule>
+                </rules>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>" > jacoco-plugin.xml
+
+    - name: Configure JaCoCo for Gradle
+      if: inputs.build-tool == 'gradle'
+      shell: bash
+      run: |
+        echo "plugins {
+          id 'jacoco'
+        }
+
+        jacoco {
+          toolVersion = '0.8.10'
+        }
+
+        jacocoTestReport {
+          reports {
+            xml.required = true
+            html.required = true
+          }
+        }
+
+        jacocoTestCoverageVerification {
+          violationRules {
+            rule {
+              limit {
+                minimum = ${{ inputs.coverage-threshold }} / 100
+              }
+            }
+          }
+        }" > jacoco.gradle
+
+    - name: Run tests with Maven
+      if: inputs.build-tool == 'maven'
+      shell: bash
+      run: |
+        # Add JaCoCo plugin to pom.xml
+        mvn build-helper:parse-version xml:insert -Dxml.file=pom.xml \
+          -Dxml.xpath="//*[local-name()='plugins']" \
+          -Dxml.file.content="$(cat jacoco-plugin.xml)"
+
+        TEST_CMD="mvn clean verify \
+          -Pcoverage \
+          -Dsurefire.includes='${{ inputs.test-pattern }}' \
+          ${{ inputs.custom-build-args }}"
+
+        if [ ! -z "${{ inputs.skip-tests }}" ]; then
+          TEST_CMD="$TEST_CMD -Dsurefire.excludes='${{ inputs.skip-tests }}'"
+        fi
+
+        if ! $TEST_CMD > test_output.txt 2>&1; then
+          echo "::error::Tests failed. Check the logs for details."
+          cat test_output.txt
+          exit 1
+        fi
+
+    - name: Run tests with Gradle
+      if: inputs.build-tool == 'gradle'
+      shell: bash
+      run: |
+        # Apply JaCoCo configuration
+        cat jacoco.gradle >> build.gradle
+
+        TEST_CMD="./gradlew clean test jacocoTestReport jacocoTestCoverageVerification \
+          -Dtest.include='${{ inputs.test-pattern }}' \
+          ${{ inputs.custom-build-args }}"
+
+        if [ ! -z "${{ inputs.skip-tests }}" ]; then
+          TEST_CMD="$TEST_CMD -Dtest.exclude='${{ inputs.skip-tests }}'"
+        fi
+
+        if ! $TEST_CMD > test_output.txt 2>&1; then
+          echo "::error::Tests failed. Check the logs for details."
+          cat test_output.txt
+          exit 1
+        fi
+
+    - name: Process coverage report
+      shell: bash
+      run: |
+        REPORT_PATH=""
+        if [ "${{ inputs.build-tool }}" = "maven" ]; then
+          REPORT_PATH="target/site/jacoco/jacoco.xml"
+        else
+          REPORT_PATH="build/reports/jacoco/test/jacocoTestReport.xml"
+        fi
+
+        COVERAGE=$(python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('${REPORT_PATH}')
+        root = tree.getroot()
+        counter = root.find('.//counter[@type=\"LINE\"]')
+        covered = float(counter.attrib['covered'])
+        missed = float(counter.attrib['missed'])
+        total = covered + missed
+        print(round((covered / total) * 100, 2))
+        ")
+        
+        echo "Total line coverage: ${COVERAGE}%"
+        
+        if (( $(echo "$COVERAGE < ${{ inputs.coverage-threshold }}" | bc -l) )); then
+          echo "::error::Coverage (${COVERAGE}%) is below threshold (${{ inputs.coverage-threshold }}%)"
+          exit 1
+        fi
+
+    - name: Publish test results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: |
+          **/surefire-reports/TEST-*.xml
+          **/test-results/test/TEST-*.xml
+        check_name: "Java Test Results"
+
+    - name: Generate coverage report
+      shell: bash
+      run: |
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "## Java Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Java Version: ${{ inputs.java-version }} (${{ inputs.java-distribution }})" >> $GITHUB_STEP_SUMMARY
+        echo "- Build Tool: ${{ inputs.build-tool }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage Threshold: ${{ inputs.coverage-threshold }}%" >> $GITHUB_STEP_SUMMARY
+        echo "- Test Pattern: ${{ inputs.test-pattern }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Results" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ inputs.include-files }}" = "true" ]; then
+          cat test_output.txt >> $GITHUB_STEP_SUMMARY
+        else
+          # Extract summary from test output
+          if [ "${{ inputs.build-tool }}" = "maven" ]; then
+            grep -A 5 "^Results:" test_output.txt >> $GITHUB_STEP_SUMMARY || true
+          else
+            grep -A 5 "^BUILD " test_output.txt >> $GITHUB_STEP_SUMMARY || true
+          fi
+        fi
+
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: java-coverage-report
+        path: |
+          **/jacoco/
+          **/surefire-reports/
+          **/test-results/
+          test_output.txt
+        retention-days: 14
