@@ -43,26 +43,24 @@ graph TB
 
 ```
 .
-├── common.hcl                # Common Terragrunt configuration
-├── terragrunt.hcl            # Root Terragrunt configuration
-├── platform_vars.yaml        # Platform-wide variables
-├── core-platform/
-│   ├── karpenter/
-│   ├── external-dns/
-│   ├── cert-manager/
-│   └── external-secrets/
-├── service-mesh/
-│   ├── istio/
-│   ├── kong-gw/
-│   └── jeager/
-├── observability/
-│   ├── loki-stack/
-│   └── kubecost/
-└── platform-tools/
-    ├── argocd/
-    ├── atlantis/
-    ├── airflow/
-    └── vault/
+├── core-platform/           # Core platform components
+│   ├── cert-manager         # Certificate management
+│   ├── external-dns         # DNS automation
+│   ├── external-secrets     # Secrets management
+│   └── karpenter            # Kubernetes node provisioning
+├── service-mesh/            # Service mesh components
+│   ├── istio                # Service mesh control plane
+│   ├── jeager               # Distributed tracing
+│   └── kong-gw              # API gateway
+├── observability/           # Monitoring and observability
+│   ├── kubecost             # Cost monitoring
+│   └── loki-stack           # Log aggregation
+├── platform-tools/          # Platform utilities
+│   ├── airflow              # Workflow automation
+│   ├── argocd               # GitOps deployment
+│   ├── atlantis             # Terraform automation
+│   └── vault                # Secrets management
+└── ci-cd-templates/         # Reusable CI/CD workflows
 ```
 
 ## 🚀 Prerequisites
@@ -211,6 +209,20 @@ Similar configurations exist for other components.
 - Jaeger for distributed tracing
 - Kubecost for cost monitoring
 - Custom dashboards in Grafana
+
+## 🔧 CI/CD Integration
+The repository includes reusable CI/CD templates for:
+
+- Docker image building (ci-cd-templates/reusable-docker-build.yaml)
+- Terragrunt operations (ci-cd-templates/terragrunt-plan-apply.yaml)
+- Environment variable management (ci-cd-templates/get-env-func.yaml)
+
+Additionally, test coverage action templates are available for multiple languages:
+
+- Java
+- .NET
+- Node.js
+- Python
 
 ## 🔄 Maintenance
 
