@@ -1,0 +1,202 @@
+name: python-test-coverage
+description: |
+  Execute Python tests with code coverage reporting.
+  Features:
+  - Configurable Python version
+  - Custom test commands and patterns
+  - Coverage threshold configuration
+  - Test result reporting
+  - Package caching
+  - Detailed coverage reporting
+  - Support for pytest and coverage.py
+  - JUnit XML report generation
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+  coverage-threshold:
+    description: 'Minimum coverage threshold (0-100)'
+    required: false
+    default: '80'
+  test-command:
+    description: 'Custom test command to run'
+    required: false
+    default: 'pytest'
+  test-pattern:
+    description: 'Test file pattern to match'
+    required: false
+    default: 'tests/'
+  include-files:
+    description: 'Include file details in coverage report'
+    required: false
+    default: 'false'
+  package-manager:
+    description: 'Python package manager to use (pip/poetry)'
+    required: false
+    default: 'pip'
+  requirements-file:
+    description: 'Requirements file path (for pip)'
+    required: false
+    default: 'requirements.txt'
+  custom-pytest-args:
+    description: 'Additional pytest arguments'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.package-manager }}
+
+    - name: Install Poetry
+      if: inputs.package-manager == 'poetry'
+      shell: bash
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        poetry config virtualenvs.create false
+
+    - name: Install dependencies (pip)
+      if: inputs.package-manager == 'pip'
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov pytest-junit-xml coverage
+        if [ -f "${{ inputs.requirements-file }}" ]; then
+          pip install -r "${{ inputs.requirements-file }}"
+        fi
+
+    - name: Install dependencies (poetry)
+      if: inputs.package-manager == 'poetry'
+      shell: bash
+      run: |
+        poetry install --no-interaction --no-root
+        poetry add --group dev pytest pytest-cov pytest-junit-xml coverage
+
+    - name: Create pytest configuration
+      shell: bash
+      run: |
+        echo "[pytest]
+        testpaths = ${{ inputs.test-pattern }}
+        python_files = test_*.py
+        addopts = 
+          --cov
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-report=html:coverage_html
+          --junitxml=junit.xml
+          --cov-fail-under=${{ inputs.coverage-threshold }}
+          ${{ inputs.custom-pytest-args }}
+        " > pytest.ini
+
+    - name: Create coverage configuration
+      shell: bash
+      run: |
+        echo "[run]
+        source = .
+        omit = 
+          tests/*
+          setup.py
+          */site-packages/*
+          
+        [report]
+        exclude_lines =
+          pragma: no cover
+          def __repr__
+          raise NotImplementedError
+          if __name__ == .__main__.:
+          pass
+          raise ImportError
+        
+        [html]
+        directory = coverage_html
+        " > .coveragerc
+
+    - name: Run tests with coverage
+      shell: bash
+      run: |
+        if [ "${{ inputs.package-manager }}" = "poetry" ]; then
+          TEST_CMD="poetry run ${{ inputs.test-command }}"
+        else
+          TEST_CMD="${{ inputs.test-command }}"
+        fi
+
+        # Run tests and capture output
+        if ! $TEST_CMD > test_output.txt 2>&1; then
+          echo "::error::Tests failed. Check the logs for details."
+          cat test_output.txt
+          exit 1
+        fi
+
+    - name: Process coverage report
+      shell: bash
+      run: |
+        # Extract coverage percentage from coverage.xml
+        COVERAGE=$(python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('coverage.xml')
+        root = tree.getroot()
+        print(float(root.attrib['line-rate']) * 100)
+        ")
+        
+        echo "Total line coverage: ${COVERAGE}%"
+        
+        if (( $(echo "$COVERAGE < ${{ inputs.coverage-threshold }}" | bc -l) )); then
+          echo "::error::Coverage (${COVERAGE}%) is below threshold (${{ inputs.coverage-threshold }}%)"
+          exit 1
+        fi
+
+    - name: Publish test results (EnricoMi)
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: "junit.xml"
+        check_name: "Python Test Results"
+
+    - name: Publish test results (dorny)
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: "Detailed Python Test Results"
+        path: "junit.xml"
+        reporter: java-junit
+
+    - name: Generate coverage report
+      shell: bash
+      run: |
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "## Python Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Python Version: ${{ inputs.python-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Package Manager: ${{ inputs.package-manager }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage Threshold: ${{ inputs.coverage-threshold }}%" >> $GITHUB_STEP_SUMMARY
+        echo "- Test Pattern: ${{ inputs.test-pattern }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Results" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ inputs.include-files }}" = "true" ]; then
+          cat test_output.txt >> $GITHUB_STEP_SUMMARY
+        else
+          # Filter and format the coverage output
+          grep "TOTAL" test_output.txt >> $GITHUB_STEP_SUMMARY || true
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "For detailed coverage information, check the coverage report artifacts." >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: python-coverage-report
+        path: |
+          coverage.xml
+          coverage_html/
+          junit.xml
+          test_output.txt
+        retention-days: 14

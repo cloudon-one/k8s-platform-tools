@@ -1,0 +1,92 @@
+name: get-env
+description: |
+  Determines the deployment environment based on git branch name.
+  Supports main->prod, release->stage, qa->qa, dev->dev mappings.
+  Any other branch defaults to 'pr' environment.
+  Can be overridden using override-env input.
+
+inputs:
+  override-env:
+    description: 'Override the auto-detected environment (prod, stage, qa, dev, pr)'
+    required: false
+    default: ''
+  debug:
+    description: 'Enable debug logging'
+    required: false
+    default: 'false'
+
+outputs:
+  environment:
+    description: 'Determined environment name (prod, stage, qa, dev, pr)'
+    value: ${{ steps.environment.outputs.environment || inputs.override-env }}
+  is_production:
+    description: 'Boolean flag indicating if this is a production environment'
+    value: ${{ steps.environment.outputs.is_production }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate override-env input
+      if: inputs.override-env != ''
+      shell: bash
+      run: |
+        valid_envs="prod stage qa dev pr"
+        if [[ ! " $valid_envs " =~ " ${{ inputs.override-env }} " ]]; then
+          echo "::error::Invalid override-env value. Must be one of: $valid_envs"
+          exit 1
+        fi
+
+    - name: Determine environment
+      id: environment
+      shell: bash
+      env: 
+        GIT_BRANCH: ${{ github.base_ref || github.head_ref || github.ref_name }}
+        DEBUG: ${{ inputs.debug }}
+      run: |
+        # Enable debug logging if requested
+        if [[ "$DEBUG" == "true" ]]; then
+          set -x
+        fi
+
+        # Function to extract environment from branch name
+        get_env() {
+          local branch=$1
+          
+          # Convert branch to lowercase for case-insensitive matching
+          branch=$(echo "$branch" | tr '[:upper:]' '[:lower:]')
+          
+          case "$branch" in
+            "main"|"master") echo "prod" ;;
+            "release"|release/*) echo "stage" ;;
+            "qa"|qa/*) echo "qa" ;;
+            "dev"|dev/*) echo "dev" ;;
+            feature/*|bugfix/*|hotfix/*) echo "pr" ;;
+            *) echo "pr" ;;
+          esac
+        }
+
+        # Determine environment
+        ENV=$(get_env "$GIT_BRANCH")
+        
+        # Set is_production flag
+        IS_PRODUCTION="false"
+        if [[ "$ENV" == "prod" ]]; then
+          IS_PRODUCTION="true"
+        fi
+
+        # Debug information
+        if [[ "$DEBUG" == "true" ]]; then
+          echo "Git ref: ${{ github.ref }}"
+          echo "Base ref: ${{ github.base_ref }}"
+          echo "Head ref: ${{ github.head_ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+        fi
+
+        # Output results
+        echo "Branch: ${GIT_BRANCH}"
+        echo "Determined environment: ${ENV}"
+        echo "Is production: ${IS_PRODUCTION}"
+        
+        # Set GitHub outputs
+        echo "environment=${ENV}" >> "$GITHUB_OUTPUT"
+        echo "is_production=${IS_PRODUCTION}" >> "$GITHUB_OUTPUT"

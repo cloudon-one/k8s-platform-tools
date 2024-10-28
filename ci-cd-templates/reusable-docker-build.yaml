@@ -1,0 +1,218 @@
+name: Reusable Workflow - Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: 'Repository to checkout (e.g., owner/repo)'
+        required: false
+        type: string
+        default: ${{ github.repository }}
+      git_ref:
+        description: 'Git reference to checkout (branch, tag, or commit)'
+        required: false
+        type: string
+        default: ${{ github.head_ref }}
+      app_name:
+        description: 'Application name for the Docker image'
+        required: true
+        type: string
+      app_workdir:
+        description: 'Working directory containing the Dockerfile'
+        required: true
+        type: string
+      override_env:
+        description: 'Override the environment detection'
+        required: false
+        type: string
+        default: ''
+      docker_file:
+        description: 'Custom Dockerfile name (relative to app_workdir)'
+        required: false
+        type: string
+        default: 'Dockerfile'
+      docker_push:
+        description: 'Whether to push the built image'
+        required: false
+        type: boolean
+        default: true
+      docker_build_args:
+        description: 'Additional Docker build arguments'
+        required: false
+        type: string
+        default: ""
+      docker_registry:
+        description: 'AWS ECR registry URL'
+        required: false
+        type: string
+        default: docker
+      runs_on:
+        description: 'GitHub Actions runner label'
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      platforms:
+        description: 'Target platforms (e.g., linux/amd64,linux/arm64)'
+        required: false
+        type: string
+        default: "linux/amd64"
+      timeout_minutes:
+        description: 'Build timeout in minutes'
+        required: false
+        type: number
+        default: 60
+      enable_vulnerability_scan:
+        description: 'Enable Trivy vulnerability scanning'
+        required: false
+        type: boolean
+        default: true
+      max_image_size_mb:
+        description: 'Maximum allowed image size in MB'
+        required: false
+        type: number
+        default: 1000
+
+    outputs:
+      image_tag:
+        description: 'Built Docker image tag'
+        value: ${{ jobs.build-and-push.outputs.image_tag }}
+      image_digest:
+        description: 'Built Docker image digest'
+        value: ${{ jobs.build-and-push.outputs.image_digest }}
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  security-events: write
+
+jobs:
+  build-and-push:
+    runs-on: ${{ inputs.runs_on }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      image_tag: ${{ steps.docker-image-tag.outputs.image_tag }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout (sparse)
+        uses: actions/checkout@v4
+        if: inputs.app_workdir != '.'
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+          sparse-checkout: ${{ inputs.app_workdir }}
+          repository: ${{ inputs.repository }}
+      
+      - name: Checkout (full)
+        uses: actions/checkout@v4
+        if: inputs.app_workdir == '.'
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+          repository: ${{ inputs.repository }}
+
+      - name: Generate semantic version
+        id: semver
+        uses: paulhatch/semantic-version@v5.4.0
+        with:
+          change_path: ${{ inputs.app_workdir }}
+          namespace: ${{ inputs.app_name }}
+          version_format: "${major}.${minor}.${patch}-${{ inputs.app_name }}"
+          bump_each_commit: true
+
+      - name: Determine environment
+        id: get-env
+        uses: ./.github/actions/get-env
+        with:
+          override-env: ${{ inputs.override_env }}
+
+      - name: Generate Docker metadata
+        id: docker-image-tag
+        run: |
+          GIT_COMMIT_SHORT=$(echo "${{ github.sha }}" | cut -c1-10)
+          DOCKER_IMAGE_TAG="${{ steps.semver.outputs.version }}-${{ steps.get-env.outputs.environment }}-${GIT_COMMIT_SHORT}"
+          echo "Generated Docker image tag: $DOCKER_IMAGE_TAG"
+          echo "image_tag=$DOCKER_IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: ${{ inputs.platforms }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: inputs.docker_push
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        if: inputs.docker_push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.docker_registry }}
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        id: build
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDX_NO_DEFAULT_LOAD: 1
+        with:
+          provenance: true
+          file: ${{ inputs.app_workdir }}/${{ inputs.docker_file }}
+          context: ${{ inputs.app_workdir }}
+          build-args: ${{ inputs.docker_build_args }}
+          push: ${{ inputs.docker_push }}
+          platforms: ${{ inputs.platforms }}
+          tags: ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.docker-image-tag.outputs.image_tag }}
+          cache-from: |
+            type=gha,scope=${{ inputs.app_name }}
+            type=registry,ref=${{ inputs.docker_registry }}/${{ inputs.app_name }}:cache
+          cache-to: type=gha,mode=max,scope=${{ inputs.app_name }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.app_name }}
+            org.opencontainers.image.version=${{ steps.semver.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ fromJSON(steps.build.outputs.metadata)['lastModified'] }}
+            com.github.repository=${{ github.repository }}
+            com.github.run_id=${{ github.run_id }}
+            com.github.environment=${{ steps.get-env.outputs.environment }}
+
+      - name: Check image size
+        if: inputs.docker_push
+        run: |
+          IMAGE_SIZE=$(docker image inspect ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.docker-image-tag.outputs.image_tag }} --format='{{.Size}}')
+          IMAGE_SIZE_MB=$((IMAGE_SIZE/1024/1024))
+          echo "Image size: ${IMAGE_SIZE_MB}MB"
+          if [ ${IMAGE_SIZE_MB} -gt ${{ inputs.max_image_size_mb }} ]; then
+            echo "::error::Image size ${IMAGE_SIZE_MB}MB exceeds maximum allowed size of ${{ inputs.max_image_size_mb }}MB"
+            exit 1
+          fi
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        if: inputs.enable_vulnerability_scan && inputs.docker_push
+        with:
+          image-ref: ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.docker-image-tag.outputs.image_tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: inputs.enable_vulnerability_scan && inputs.docker_push
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Verify image health
+        if: inputs.docker_push
+        run: |
+          docker pull ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.docker-image-tag.outputs.image_tag }}
+          if ! docker inspect ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.docker-image-tag.outputs.image_tag }} >/dev/null 2>&1; then
+            echo "::error::Failed to verify image health"
+            exit 1
+          fi

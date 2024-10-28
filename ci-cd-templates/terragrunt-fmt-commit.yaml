@@ -1,0 +1,203 @@
+name: Terragrunt Format and Commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_version:
+        description: 'Terraform version to use'
+        required: false
+        default: '1.9.8'
+        type: string
+      terragrunt_version:
+        description: 'Terragrunt version to use'
+        required: false
+        default: '0.68.4'
+        type: string
+      tflint_version:
+        description: 'TFLint version to use'
+        required: false
+        default: 'latest'
+        type: string
+      create_pull_request:
+        description: 'Create a pull request with changes'
+        required: false
+        default: false
+        type: boolean
+      base_branch:
+        description: 'Base branch for pull request'
+        required: false
+        default: 'main'
+        type: string
+
+concurrency:
+  group: terraform-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  terraform-fmt-and-commit:
+    name: "Format Terraform Code"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache tools
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ~/.tflint.d/plugins
+          key: ${{ runner.os }}-terraform-${{ inputs.terraform_version }}-${{ inputs.terragrunt_version }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform_version || env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Verify Terraform installation
+        run: |
+          if ! terraform version; then
+            echo "::error::Terraform installation failed"
+            exit 1
+          fi
+
+      - name: Install Terragrunt
+        run: |
+          TERRAGRUNT_VERSION="${{ inputs.terragrunt_version || env.TERRAGRUNT_VERSION }}"
+          wget -q -O /usr/local/bin/terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64"
+          chmod +x /usr/local/bin/terragrunt
+          if ! terragrunt -v; then
+            echo "::error::Terragrunt installation failed"
+            exit 1
+          fi
+
+      - name: Install TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ inputs.tflint_version || env.TFLINT_VERSION }}
+
+      - name: Initialize TFLint
+        run: |
+          tflint --init
+          if ! tflint -v; then
+            echo "::error::TFLint initialization failed"
+            exit 1
+          fi
+
+      - name: Check branch protection
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "::error::Cannot run format and commit directly on main branch"
+          exit 1
+
+      - name: Format Terraform files
+        id: terraform-fmt
+        run: |
+          echo "Formatting Terraform files..."
+          terraform fmt -recursive -diff
+          echo "terraform_formatted=true" >> $GITHUB_OUTPUT
+
+      - name: Format Terragrunt files
+        id: terragrunt-fmt
+        run: |
+          echo "Formatting Terragrunt files..."
+          terragrunt hclfmt
+          echo "terragrunt_formatted=true" >> $GITHUB_OUTPUT
+
+      - name: Run TFLint
+        id: tflint
+        run: |
+          echo "Running TFLint..."
+          tflint --recursive --fix --format compact
+          echo "tflint_run=true" >> $GITHUB_OUTPUT
+
+      - name: Generate change report
+        id: changes
+        run: |
+          echo "### Formatting Changes" >> changes.md
+          echo "#### Modified Files:" >> changes.md
+          git diff --name-only >> changes.md
+          echo "" >> changes.md
+          echo "#### Detailed Changes:" >> changes.md
+          git diff --color=never >> changes.md
+
+          # Check if there are any changes
+          if [[ -n $(git status -s) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: inputs.create_pull_request == true && steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: format Terraform and Terragrunt files'
+          title: 'chore: format Terraform and Terragrunt files'
+          body: |
+            This PR contains automated formatting changes for Terraform and Terragrunt files.
+            
+            Changes include:
+            - Terraform `fmt` formatting
+            - Terragrunt `hclfmt` formatting
+            - TFLint fixes
+            
+            <details>
+            <summary>Detailed Changes</summary>
+            
+            ```diff
+            $(cat changes.md)
+            ```
+            </details>
+          branch: terraform-format-${{ github.run_id }}
+          base: ${{ inputs.base_branch }}
+          delete-branch: true
+          labels: |
+            terraform
+            automated-pr
+            formatting
+
+      - name: Commit changes
+        if: inputs.create_pull_request != true && steps.changes.outputs.has_changes == 'true'
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: '.'
+          message: 'chore: format Terraform and Terragrunt files'
+          author_name: 'GitHub Actions[bot]'
+          author_email: 'github-actions[bot]@users.noreply.github.com'
+          push: true
+
+      - name: Publish formatting report
+        if: always()
+        run: |
+          echo "## Terraform Formatting Report" >> $GITHUB_STEP_SUMMARY
+          echo "### Tool Versions" >> $GITHUB_STEP_SUMMARY
+          echo "- Terraform: ${{ inputs.terraform_version || env.TERRAFORM_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Terragrunt: ${{ inputs.terragrunt_version || env.TERRAGRUNT_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- TFLint: ${{ inputs.tflint_version || env.TFLINT_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Terraform formatting: ${{ steps.terraform-fmt.outputs.terraform_formatted == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Terragrunt formatting: ${{ steps.terragrunt-fmt.outputs.terragrunt_formatted == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- TFLint fixes: ${{ steps.tflint.outputs.tflint_run == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Changes detected: ${{ steps.changes.outputs.has_changes == 'true' && 'Yes' || 'No' }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ -f changes.md ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Change Details" >> $GITHUB_STEP_SUMMARY
+            cat changes.md >> $GITHUB_STEP_SUMMARY
+          fi
